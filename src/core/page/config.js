@@ -1,209 +1,122 @@
-export default function configs(tplmh = null, tplsb = null) {
-    const data = {
+export function modes(sub, userAgent) {
+    const modes = {
         mihomo: {
-            name: 'Clash(mihomo)',
-            placeholder: 'https:// 订阅链接或单节点链接',
-            tipMarkdown: `
-## mihomo 特性
+            name: 'Clash (mihomo)',
+            placeholder: '请输入clash订阅地址url，支持各种订阅或单节点链接',
+            tipText: `
+## mihomo 使用提示：
 
-- 支持订阅/单节点合并，转换后端 [sub-store-node](https://github.com/Kwisma/Sub-Store-node.git)
-- 面板: http://127.0.0.1:9090/ui/xd
-- mixed(http+socks)端口: 7890，去广告 + 防DNS泄漏
-- **附加参数说明**  
+- 支持各种订阅或单节点链接，自动合并生成配置
+- mixed(http/socks) 端口: 7890
+- 适用于 mihomo 客户端
+- 防止 DNS 泄漏(安全DNS/DoH)
+- 关闭所有覆写功能(不是关闭功能，是关闭覆写)以确保配置正常生效
 
-**附加参数说明** 
+## 附加参数说明
 
-- UDP: 开启UDP代理
-- ECH: 启用Encrypted Client Hello (ECH)
-- 链式代理: [启用链式代理](https://wiki.metacubex.one/config/proxies/dialer-proxy/) 必须填入两个以上的地址，第一个输入订阅将作为前置链式，第二个往后的不做为前置
-- 分应用代理: 排除CN应用(Android)
-- 分IPCIDR代理: 排除CN IP
-- 去广告dns: 去广告DNS
-- 获取流量信息：获取订阅的流量信息
-- 仅代理: 关闭tun，纯http/socks代理
-- 仅节点: 仅返回节点信息
-- 开启ipv6: 开启ipv6路由（对于不支持ipv6出站的节点将使网络不可达）
+- UDP : 启用 UDP 代理流量 [查看详情](https://wiki.metacubex.one/config/proxies/#udp)
+- 分应用代理: 排除 CN 应用(仅包含android应用)不入代理工具 [查看详情](https://wiki.metacubex.one/config/inbound/tun/#exclude-package)
+- 分IPCIDR代理: 排除 CN IP 不进入代理工具 [查看详情](https://wiki.metacubex.one/config/inbound/tun/#route-exclude-address)
+- 仅代理: 关闭 VPN 代理，使用 mixed(http/socks) 端口进行代理。实际就是关闭了 tun 入站
+- 输出为YAML: 勾选后生成的配置文件将自动转换成YAML文件
 
-            `,
-            protocolList: ['udp', 'ech', 'relay', 'ep', 'ea', 'adgdns', 'heruser', 'tun', 'nodelist', 'ipv6', 'log'],
-            protocolLabels: {
-                udp: 'UDP',
-                ech: 'ECH',
-                relay: '链式代理',
-                ep: '分应用代理',
-                ea: '分IPCIDR代理',
-                adgdns: '去广告DNS',
-                heruser: '获取流量信息',
-                tun: '仅代理',
-                nodelist: '仅节点',
-                ipv6: '开启ipv6',
-                log: {
-                    label: '日志等级',
-                    levels: ['silent', 'error', 'warning', 'info', 'debug'],
-                },
-            },
-            templates: {
-                通用: [
-                    {
-                        label: '默认(ACL4SSR_Online_Full)',
-                        value: 'https://raw.githubusercontent.com/Kwisma/cf-worker-mihomo/main/template/mihomo/ACL4SSR_Online_Full.yaml',
-                    },
-                    {
-                        label: '默认(全分组)',
-                        value: 'https://raw.githubusercontent.com/Kwisma/cf-worker-mihomo/main/template/mihomo/default_full.yaml',
-                    },
-                    {
-                        label: '默认(精简版)',
-                        value: 'https://raw.githubusercontent.com/Kwisma/cf-worker-mihomo/main/template/mihomo/default.yaml',
-                    },
-                ],
-                'Lanlan13-14': [
-                    {
-                        label: 'configfull 全分组版 (秋风去广告)',
-                        value: 'https://raw.githubusercontent.com/Lanlan13-14/Rules/refs/heads/main/configfull.yaml',
-                    },
-                    {
-                        label: 'configfull_NoAd (无广告)',
-                        value: 'https://raw.githubusercontent.com/Lanlan13-14/Rules/refs/heads/main/configfull_NoAd.yaml',
-                    },
-                    {
-                        label: 'configfull_NoAd_lite (精简)',
-                        value: 'https://raw.githubusercontent.com/Lanlan13-14/Rules/refs/heads/main/configfull_NoAd_lite.yaml',
-                    },
-                    {
-                        label: 'configfull_lite (精简版)',
-                        value: 'https://raw.githubusercontent.com/Lanlan13-14/Rules/refs/heads/main/configfull_lite.yaml',
-                    },
-                    {
-                        label: 'configfull_beta',
-                        value: 'https://raw.githubusercontent.com/Lanlan13-14/Rules/refs/heads/main/configfull_beta.yaml',
-                    },
-                ],
-                'mihomo-party-org': [
-                    {
-                        label: '布丁狗的订阅转换',
-                        value: 'https://raw.githubusercontent.com/mihomo-party-org/override-hub/refs/heads/main/yaml/布丁狗的订阅转换.yaml',
-                    },
-                    {
-                        label: 'ACL4SSR_Online_Full',
-                        value: 'https://raw.githubusercontent.com/mihomo-party-org/override-hub/refs/heads/main/yaml/ACL4SSR_Online_Full.yaml',
-                    },
-                    {
-                        label: 'ACL4SSR_Online_Full_WithIcon',
-                        value: 'https://raw.githubusercontent.com/mihomo-party-org/override-hub/refs/heads/main/yaml/ACL4SSR_Online_Full_WithIcon.yaml',
-                    },
-                ],
-            },
+## 配置信息
+
+**userAgent** ${userAgent}
+
+<!-- **转换后端** ${sub} -->
+                `,
+            protocolOptions: [
+                { value: 'udp', label: '启用 UDP', checked: true },
+                { value: 'ech', label: '启用 ECH' },
+                { value: 'ep', label: '启用 分应用代理(仅Android)' },
+                { value: 'ea', label: '启用 分IPCIDR代理(ios/macOS/windows/linux 推荐)' },
+                { value: 'tun', label: '启用 仅代理' },
+                { value: 'yaml', label: '输出为YAML', checked: true },
+            ],
         },
         singbox: {
-            name: 'Sing-box',
-            placeholder: 'https:// 订阅链接 / 节点链接',
-            tipMarkdown: `
-## sing-box 
-- 支持多链接合并
-- clash api 面板: http://127.0.0.1:9090 
-- singbox api 面板: http:// 127.0.0.1:9091
-- mixed(http+socks) 端口: 7890
+            name: 'Singbox',
+            placeholder: '请输入singbox订阅地址url，支持各种订阅或单节点链接',
+            tipText: `
+## singbox 使用提示：
 
-**附加参数说明**  
+- 支持各种订阅或单节点链接，自动合并生成配置
+- 适用于 sing-box 客户端
+- 支持 1.13.x
+- 支持 1.14.x
+- 防止 DNS 泄漏(安全DNS/DoH)
+- 关闭所有覆写功能(不是关闭功能，是关闭覆写)以确保配置正常生效
 
-- UDP: 开启UDP代理
-- ECH: 启用Encrypted Client Hello (ECH)
-- 链式代理: [启用链式代理](https://sing-box.sagernet.org/zh/configuration/shared/dial/) 必须填入两个以上的地址，第一个输入订阅将作为前置链式，第二个往后的不做为前置
-- UDP分段: 把大 UDP 包拆成多个小包发送
-- TLS分段: 拆分 TLS 握手数据
-- 分应用代理: 排除CN应用(Android)
-- 分IPCIDR代理: 排除CN IP
-- tailscale: [查看说明](https://sing-box.sagernet.org/zh/configuration/dns/server/tailscale/)
-- bridge:  [查看说明](https://sing-box.sagernet.org/zh/configuration/outbound/bridge/)
-- 去广告dns: 去广告DNS
-- 获取流量信息：获取订阅的流量信息
-- 仅代理: 关闭tun，纯http/socks代理
-- 仅节点: 仅返回节点信息
-- 开启ipv6: 开启ipv6路由（对于不支持ipv6出站的节点将使网络不可达）
+## 附加参数说明
 
-            `,
-            protocolList: [
-                'udp',
-                'ech',
-                'relay',
-                'udp_frag',
-                'tls_frag',
-                'ep',
-                'ea',
-                'tailscale',
-                'bridge',
-                'adgdns',
-                'heruser',
-                'tun',
-                'nodelist',
-                'ipv6',
-                'log',
+- UDP: 启用 UDP 代理流量 [查看详情](https://sing-box.sagernet.org/zh/configuration/route/rule_action/#udp_disable_domain_unmapping)
+- UDP 分段: [查看详情](https://sing-box.sagernet.org/zh/configuration/shared/dial/#udp_fragment)
+- TLS 分段: 绕过被防火墙拦截的域名 [查看详情](https://sing-box.sagernet.org/zh/configuration/route/rule_action/#tls_fragment)
+- 分应用代理: 排除 CN 应用(仅包含android应用)不入代理工具 [查看详情](https://sing-box.sagernet.org/zh/configuration/inbound/tun/#exclude_package)
+- 分IPCIDR代理: 排除 CN IP 不进入代理工具 [查看详情](https://sing-box.sagernet.org/zh/configuration/inbound/tun/#route_exclude_address)
+- tailscale: [查看详情](https://sing-box.sagernet.org/zh/configuration/endpoint/tailscale)
+- 仅代理: 关闭 VPN 代理，使用 mixed(http/socks) 端口进行代理。实际就是关闭了 tun 入站
+
+## 配置信息
+
+**userAgent** ${userAgent}
+
+<!-- **转换后端** ${sub} -->
+                `,
+            protocolOptions: [
+                { value: 'ech', label: '启用 ECH' },
+                { value: 'udp_frag', label: '启用 UDP 分段' },
+                { value: 'tls_frag', label: '启用 TLS 分段' },
+                { value: 'ep', label: '启用 分应用代理(仅Android)' },
+                { value: 'ea', label: '启用 分IPCIDR代理(ios/macOS/windows/linux 推荐)' },
+                { value: 'tailscale', label: '启用 tailscale' },
+                { value: 'tun', label: '启用 仅代理' },
+                { value: 'box1.13', label: 'Singbox 1.13', lock: 'version' },
+                { value: 'box1.14', label: 'Singbox 1.14', lock: 'version' },
             ],
-            protocolLabels: {
-                udp: 'UDP',
-                ech: 'ECH',
-                relay: '链式代理',
-                udp_frag: 'UDP分段',
-                tls_frag: 'TLS分段',
-                ep: '分应用代理',
-                ea: '分IPCIDR',
-                tailscale: 'Tailscale',
-                bridge: 'bridge',
-                adgdns: '去广告DNS',
-                heruser: '获取流量信息',
-                tun: '仅代理',
-                nodelist: '仅节点',
-                ipv6: '开启ipv6',
-                log: {
-                    label: '日志等级',
-                    levels: ['trace', 'debug', 'info', 'warn', 'error', 'fatal', 'panic'],
-                },
-            },
-            templates: {
-                通用: [
-                    {
-                        label: '默认(ACL4SSR_Online_Full)',
-                        value: 'https://raw.githubusercontent.com/Kwisma/cf-worker-mihomo/main/template/singbox/ACL4SSR_Online_Full.yaml',
-                    },
-                    {
-                        label: '默认(全分组)',
-                        value: 'https://raw.githubusercontent.com/Kwisma/cf-worker-mihomo/main/template/singbox/default_full.yaml',
-                    },
-                    {
-                        label: '默认(精简版)',
-                        value: 'https://raw.githubusercontent.com/Kwisma/cf-worker-mihomo/main/template/singbox/default.yaml',
-                    },
-                ],
-            },
         },
         v2ray: {
             name: 'V2Ray',
-            placeholder: 'vmess:// 或订阅链接',
-            tipMarkdown: `## V2Ray 订阅转换\n支持标准订阅转换，使用后端 sub-store 生成通用配置。`,
-            protocolList: [],
-            templates: null,
-            noTemplate: true,
+            placeholder: '请输入V2Ray订阅地址url, 支持各种订阅或单节点链接',
+//            tipText: `
+// <!-- **转换后端** ${sub} -->
+//                `,
+            protocolOptions: [],
+            noTemplate: true, // 添加此标志表示不需要 protocolOptions 和 模板
         },
     };
+    return JSON.stringify(modes);
+}
 
-    if (tplmh) {
-        data.mihomo.templates = {
-            ['自定义']: tplmh.map((i) => ({
-                label: i.split('/').pop().split('?')[0],
-                value: i,
-            })),
-            ...data.mihomo.templates,
-        };
-    }
-    if (tplsb) {
-        data.singbox.templates = {
-            ['自定义']: tplsb.map((i) => ({
-                label: i.split('/').pop().split('?')[0],
-                value: i,
-            })),
-            ...data.singbox.templates,
-        };
-    }
+export function configs() {
+    const data = {
+        mihomo: [
+            {
+                label: '策略组和规则',
+                options: [
+                    {
+                        label: '简易分流 Noicon',
+                        value: '/ruleER.yaml',
+                    },
+                    {
+                        label: '简易分流 Withicon',
+                        value: '/ruleFL.yaml',
+                    },
+                ],
+            },
+        ],
+        singbox: [
+            {
+                label: '策略组和规则',
+                options: [
+                    {
+                        label: '简易分流',
+                        value: '/sing_rules.json',
+                    },
+                ],
+            },
+        ],
+    };
     return JSON.stringify(data);
 }

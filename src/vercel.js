@@ -10,9 +10,7 @@ async function handler(req, res) {
     try {
         const result = await handleRequest(e);
 
-        const headerEntries = result.headers instanceof Headers ? result.headers.entries() : Object.entries(result.headers);
-
-        for (const [key, value] of headerEntries) {
+        for (const [key, value] of Object.entries(result.headers)) {
             res.setHeader(key, value);
         }
 

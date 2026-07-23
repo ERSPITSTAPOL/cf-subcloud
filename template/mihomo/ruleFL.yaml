@@ -1,0 +1,71 @@
+# Group-type Anchors
+UrlTest: &UrlTest   {type: url-test, interval: 5400, tolerance: 100, lazy: true, url: "https://www.gstatic.com/generate_204", disable-udp: false, timeout: 3000, max-failed-times: 3, hidden: false, include-all: true}
+Selector: &Selector {type: select, disable-udp: false, hidden: false, include-all: true}
+# Group-Selector Anchors
+SelectProxy: &SelectProxy {type: select, hidden: false, proxies: [🚀Global, 🇸🇬Singapore, 🇭🇰HongKong, 🇹🇼Taiwan, 🇺🇸United States, 🇯🇵Japan, 🇰🇷South Korea, 🛰Others]}
+# Rule-Providers Anchors
+DomainMrs: &DomainMrs {type: http, interval: 0, proxy: 🚀Global, behavior: domain, format: mrs}
+IPcidrMrs: &IPcidrMrs {type: http, interval: 0, proxy: 🚀Global, behavior: ipcidr, format: mrs}
+proxy-groups: 
+  - {name: 🌐Google,      <<: *SelectProxy, icon: https://fastly.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Google_Search.png}
+  - {name: 🔍AI Platform, <<: *SelectProxy, icon: https://fastly.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/AI.png}
+  - {name: 📖Wikipedia,   <<: *SelectProxy, icon: https://fastly.jsdelivr.net/gh/simple-icons/simple-icons@develop/icons/wikipedia.svg}
+  - {name: 💲Payment,     <<: *SelectProxy, icon: https://fastly.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/PayPal.png}
+  - {name: 🗼Pixiv,       <<: *SelectProxy, icon: https://fastly.jsdelivr.net/gh/simple-icons/simple-icons@develop/icons/pixiv.svg}
+  - {name: 💬Telegram,    <<: *SelectProxy, icon: https://fastly.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Telegram_X.png}
+  # Areas
+  - {name: 🚀Global,        <<: *Selector, proxies: [🚀Global-Auto], icon: https://fastly.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Global.png}
+  - {name: 🇭🇰HongKong,      <<: *Selector, proxies: [🇭🇰HK-Auto], filter: "/香港|🇭🇰|HK|Hong|HKG/i", icon: https://fastly.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Hong_Kong.png}
+  - {name: 🇸🇬Singapore,     <<: *Selector, proxies: [🇸🇬SG-Auto], filter: "/坡|🇸🇬|狮城|新加坡|SG|Singapore|SIN|XSP/i", icon: https://fastly.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Singapore.png}
+  - {name: 🇹🇼Taiwan,        <<: *Selector, proxies: [🇹🇼TW-Auto], filter: "/台灣|台湾|🇼🇸|🇹🇼|TW|tai|TPE|TSA|KHH/i", icon: https://fastly.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Taiwan.png}
+  - {name: 🇺🇸United States, <<: *Selector, proxies: [🇺🇸US-Auto], filter: "/美|美国|🇺🇸|US|凤凰城|西雅图|USA|JFK|LAX|ORD|ATL|DFW|SFO|MIA|SEA|IAD/i", icon: https://fastly.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/United_States.png}
+  - {name: 🇯🇵Japan,         <<: *Selector, proxies: [🇯🇵JP-Auto], filter: "/日本|东京|🇯🇵|JP|Japan|NRT|HND|KIX|CTS|FUK/i", icon: https://fastly.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Japan.png}
+  - {name: 🇰🇷South Korea,   <<: *Selector, proxies: [🇰🇷ROK-Auto], filter: "/韩国|🇰🇷|韓|首尔|南朝鲜|KR|KOR|ROK|Korea|South/i", icon: https://fastly.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Korea.png}
+  - {name: 🇪🇺Europe,        <<: *Selector, proxies: [🇪🇺EU-Auto], filter: "/奥|比|保|克罗地亚|塞|捷|丹|爱沙|芬|法|德|希|匈|爱尔|意|拉|立|卢|马其它|荷|波|葡|罗|斯洛伐|斯洛文|西|瑞|英|🇧🇪|🇨🇿|🇩🇰|🇫🇮|🇫🇷|🇩🇪|🇮🇪|🇮🇹|🇱🇹|🇱🇺|🇳🇱|🇵🇱|🇸🇪|🇬🇧|CDG|FRA|AMS|MAD|BCN|FCO|MUC|BRU/i", icon: https://fastly.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/European_Union.png}
+  - {name: 🛰Others,        <<: *Selector, proxies: [], exclude-filter: "美|港|坡|台|新|奥|比|保|克罗地亚|塞|捷|丹|爱沙|芬|法|德|希|匈|爱尔|意|拉|立|卢|马其它|荷|波|葡|罗|斯洛伐|斯洛文|西|瑞|英|🇭🇰|🇼🇸|🇹🇼|🇸🇬|🇯🇵|🇰🇷|🇺🇸|🇬🇧|🇦🇹|🇧🇪|🇨🇿|🇩🇰|🇫🇮|🇫🇷|🇩🇪|🇮🇪|🇮🇹|🇱🇹|🇱🇺|🇳🇱|🇵🇱|🇸🇪|HK|TW|SG|JP|KR|US|GB|CDG|FRA|AMS|MAD|BCN|FCO|MUC|BRU|HKG|TPE|TSA|KHH|SIN|XSP|NRT|HND|KIX|CTS|FUK|JFK|LAX|ORD|ATL|DFW|SFO|MIA|SEA|IAD|LHR|LGW|群|邀请|返利|循环|官网|客服|网站|网址|获取|订阅|流量|到期|机场|下次|版本|官址|备用|过期|已用|联系|邮箱|工单|贩卖|通知|倒卖|防止|国内|地址|频道|无法|说明|使用|提示|特别|访问|支持|教程|关注|更新|作者|加入|续费|更多|客户端|官方|USE|USED|TOTAL|EXPIRE|EMAIL|Panel|Channel|Author", icon: https://fastly.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Area.png}
+  # Auto
+  - {name: 🚀Global-Auto, <<: *UrlTest, exclude-filter: "DIRECT|群|邀请|返利|循环|官网|客服|网站|网址|获取|订阅|流量|到期|机场|下次|版本|官址|备用|过期|已用|联系|邮箱|工单|贩卖|通知|倒卖|防止|国内|地址|频道|无法|说明|使用|提示|特别|访问|支持|教程|关注|更新|作者|加入|续费|更多|客户端|官方|USE|USED|TOTAL|EXPIRE|EMAIL|Panel|Channel|Author"}
+  - {name: 🇭🇰HK-Auto, <<: *UrlTest, filter: "/香港|🇭🇰|HK|Hong|HKG/i"}
+  - {name: 🇹🇼TW-Auto, <<: *UrlTest, filter: "/台灣|台湾|🇼🇸|🇹🇼|TW|tai|TPE|TSA|KHH/i"}
+  - {name: 🇸🇬SG-Auto, <<: *UrlTest, filter: "/坡|🇸🇬|狮城|新加坡|SG|Singapore|SIN|XSP/i"}
+  - {name: 🇺🇸US-Auto, <<: *UrlTest, filter: "/美|美国|🇺🇸|US|凤凰城|西雅图|USA|JFK|LAX|ORD|ATL|DFW|SFO|MIA|SEA|IAD/i"}
+  - {name: 🇯🇵JP-Auto, <<: *UrlTest, filter: "/日本|东京|🇯🇵|JP|Japan|NRT|HND|KIX|CTS|FUK/i"}
+  - {name: 🇰🇷ROK-Auto, <<: *UrlTest, filter: "/韩国|🇰🇷|韓|首尔|南朝鲜|KR|KOR|ROK|Korea|South/i"}
+  - {name: 🇪🇺EU-Auto, <<: *UrlTest, filter: "/奥|比|保|克罗地亚|塞|捷|丹|爱沙|芬|法|德|希|匈|爱尔|意|拉|立|卢|马其它|荷|波|葡|罗|斯洛伐|斯洛文|西|瑞|英|🇧🇪|🇨🇿|🇩🇰|🇫🇮|🇫🇷|🇩🇪|🇮🇪|🇮🇹|🇱🇹|🇱🇺|🇳🇱|🇵🇱|🇸🇪|🇬🇧|CDG|FRA|AMS|MAD|BCN|FCO|MUC|BRU/i"}
+rules: 
+  # REJECT
+  - RULE-SET,category-ads-all,REJECT-DROP
+  # Domain
+  - RULE-SET,category-ai-!cn,🔍AI Platform
+  - RULE-SET,youtube,🌐Google
+  - RULE-SET,google,🌐Google
+  - RULE-SET,paypal,💲Payment
+  - RULE-SET,visa,💲Payment
+  - RULE-SET,mastercard,💲Payment
+  - RULE-SET,pixiv,🗼Pixiv
+  - RULE-SET,telegram,💬Telegram
+  - RULE-SET,geolocation-cn,DIRECT
+  - RULE-SET,tld-cn,DIRECT
+  - DOMAIN-SUFFIX,wikipedia.org,📖Wikipedia
+  # IP
+  - RULE-SET,google_ip,🌐Google,no-resolve
+  - RULE-SET,telegram_ip,💬Telegram,no-resolve
+  - RULE-SET,cn_ip,DIRECT
+  - MATCH,🚀Global
+rule-providers: 
+  # Domain
+  telegram:   {<<: *DomainMrs, url: https://fastly.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@meta/geo-lite/geosite/telegram.mrs}
+  youtube:    {<<: *DomainMrs, url: https://fastly.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@meta/geo-lite/geosite/youtube.mrs}
+  paypal:     {<<: *DomainMrs, url: https://fastly.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@meta/geo/geosite/paypal.mrs}
+  visa:       {<<: *DomainMrs, url: https://fastly.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@meta/geo/geosite/visa.mrs}
+  mastercard: {<<: *DomainMrs, url: https://fastly.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@meta/geo/geosite/mastercard.mrs}
+  pixiv:      {<<: *DomainMrs, url: https://fastly.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@meta/geo/geosite/pixiv.mrs}
+  google:     {<<: *DomainMrs, url: https://fastly.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@meta/geo-lite/geosite/google.mrs}
+  category-ads-all: {<<: *DomainMrs, url: https://fastly.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@meta/geo/geosite/category-ads-all.mrs}
+  category-ai-!cn:  {<<: *DomainMrs, url: https://fastly.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@meta/geo/geosite/category-ai-!cn.mrs}
+  geolocation-cn:   {<<: *DomainMrs, url: https://fastly.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@meta/geo/geosite/geolocation-cn.mrs}
+  tld-cn:           {<<: *DomainMrs, url: https://fastly.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@meta/geo/geosite/tld-cn.mrs}
+  # IP
+  google_ip:   {<<: *IPcidrMrs, url: https://fastly.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@meta/geo-lite/geoip/google.mrs}
+  telegram_ip: {<<: *IPcidrMrs, url: https://fastly.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@meta/geo-lite/geoip/telegram.mrs}
+  cn_ip:       {<<: *IPcidrMrs, url: https://fastly.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@meta/geo-lite/geoip/cn.mrs}

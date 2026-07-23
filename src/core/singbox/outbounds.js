@@ -1,69 +1,84 @@
-import { processSubscription } from '../../utils/index.js';
-
-/**
- * 获取并处理 outbound 节点数据
- *
- * 根据配置选择不同的数据获取方式：
- * - e.sub 为 true 时，通过订阅地址获取节点
- * - e.sub 为 false 时，通过节点转换模块解析节点
- *
- * 获取完成后会执行 outbound 处理逻辑，并返回标准化响应数据。
- *
- * @param {Object} e - 请求配置参数
- * @param {boolean} e.sub - 是否使用订阅模式
- * @param {string|string[]} e.urls - 节点订阅地址或节点数据地址
- * @param {string} [e.target] - 节点转换目标格式
- *
- * @returns {Promise<Object>} outbound 数据结果
- * @returns {number} returns.status - 请求状态码
- * @returns {Object} returns.headers - 响应头信息
- * @returns {Object} returns.data - 处理后的配置数据
- *
- * @throws {Error} 当未找到有效节点时抛出异常
- */
+import { fetchResponse, buildApiUrl } from '../../utils/index.js';
 export default async function getOutbounds_Data(e) {
-    const results = await processSubscription(e.urls, e.userAgent, e.sub, e.target);
-    if (results.data?.data?.outbounds?.length === 0) {
-        throw new Error('未从任何 URL 找到有效的节点');
+    const isSingle = e.urls.length === 1;
+    const outboundsList = [];
+    const responseList = [];
+
+    const results = await Promise.allSettled(e.urls.map((url, index) => fetchWithFallback(url, e).then((res) => ({ res, index }))));
+
+    for (const result of results) {
+        if (result.status !== 'fulfilled') continue;
+
+        const { res, index } = result.value;
+        if (res?.data?.outbounds?.length > 0) {
+            processOutbounds(res.data.outbounds, e, isSingle ? 0 : index + 1);
+            responseList.push({ status: res.status, headers: res.headers });
+            outboundsList.push(res.data.outbounds);
+        }
     }
-    processOutbounds(results.data.data.outbounds, e, results.data.names);
+
+    if (responseList.length === 0) {
+        throw new Error('未从任何 URL 找到有效的出站链接');
+    }
+
+    if (isSingle) {
+        const response = responseList[0];
+        return {
+            status: response.status,
+            headers: response.headers,
+            data: { outbounds: outboundsList.flat() },
+        };
+    }
+
+    const randomResponse = responseList[Math.floor(Math.random() * responseList.length)];
+
     return {
-        status: results.status,
-        headers: results.headers,
-        data: results.data.data,
+        status: randomResponse.status,
+        headers: randomResponse.headers,
+        data: { outbounds: outboundsList.flat() },
     };
 }
 
+// 带回退机制的请求
+async function fetchWithFallback(url, options) {
+    const res = await fetchResponse(url, options.userAgent);
+
+    if (res?.data?.outbounds && Array.isArray(res.data.outbounds)) {
+        return res;
+    }
+
+    // 尝试使用构建的 API URL
+    const apiUrl = buildApiUrl(url, options.sub, options.target);
+    return await fetchResponse(apiUrl, options.userAgent);
+}
+
 // 处理 outbounds 数组
-function processOutbounds(outbounds, options, names) {
+function processOutbounds(outbounds, options, index) {
     outbounds.forEach((outbound) => {
-        if (options.relay && names[0].includes(outbound.tag)) {
-            options.proxyname = names[0];
-            options.dialerproxy = names.slice(1).flat();
-            if (options.proxyname && options.dialerproxy) {
-                outbound.detour = '🔗链式前置';
+        if (index > 0) {
+            outbound.tag = `[${index}] ${outbound.tag}`;
+            if (options.relay) {
+                if (index === 1) {
+                    options.proxyname ??= [];
+                    options.proxyname.push(outbound.tag);
+                } else {
+                    outbound.detour = '🔗链式前置';
+                    options.dialerproxy ??= [];
+                    options.dialerproxy.push(outbound.tag);
+                }
             }
         }
         if (options.udp_fragment) {
             outbound.udp_fragment = true;
         }
-        if (options.ech && outbound.tls && !outbound.tls?.reality) {
+        if (options.ech && outbound.tls) {
             outbound.tls = {
                 ...outbound.tls,
                 ech: {
                     enabled: true,
-                    query_server_name: 'cloudflare-ech.com',
+                    query_server_name: 'cloudflare-ech.com'
                 },
             };
         }
     });
-}
-
-// 格式化响应
-function formatResponse(response) {
-    return {
-        status: response.status,
-        headers: response.headers,
-        data: response.data,
-    };
 }

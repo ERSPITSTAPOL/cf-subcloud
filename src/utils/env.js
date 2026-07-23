@@ -1,85 +1,118 @@
-import { splitUrlsAndProxies, backimg, beiantext, beiandizi, isUrl } from './index.js';
-export function buildConfig(request, env, isNode = false) {
-    const url = isNode ? new URL(request.url, `http://${request.headers.host}`) : new URL(request.url);
+import { backimg, subapi, beiantext, beiandizi } from './index.js';
 
-    const getHeader = (key) => {
-        if (isNode) {
-            return request.headers[key.toLowerCase()];
-        }
-        return request.headers.get(key);
-    };
+function makeAccessors(request, env, isNode) {
+    const url = isNode
+        ? new URL(request.url, `http://${request.headers.host}`)
+        : new URL(request.url);
 
-    const getParam = (key) => url.searchParams.get(key);
+    const getHeader = (key) =>
+        isNode ? request.headers[key.toLowerCase()] : request.headers.get(key);
 
+    const getParam    = (key) => url.searchParams.get(key);
+    const getParamAll = (key) => url.searchParams.getAll(key);
     const getParamBool = (key) => getParam(key) === 'true';
-    const getEnv = (key, fallback) => {
-        if (isNode) {
-            return process.env[key] ?? fallback;
-        }
-        return env?.[key] ?? fallback;
+
+    const getEnv = (key, fallback) =>
+        isNode ? (process.env[key] ?? fallback) : (env?.[key] ?? fallback);
+
+    return { url, getHeader, getParam, getParamAll, getParamBool, getEnv };
+}
+
+function resolveTarget(getParam) {
+    return getParam('target') || null;
+}
+
+const TARGET_UA_MAP = {
+    mihomo:  'ClashMetaForAndroid',
+    singbox: 'sing-box',
+    v2ray:   'v2rayNG',
+};
+
+function resolveUserAgent(rawUA, target) {
+    const isClientUA = /clash|meta|mihomo|sing|ray/i.test(rawUA ?? '');
+    if (isClientUA) return rawUA;
+    return TARGET_UA_MAP[target] ?? rawUA;
+}
+
+function resolveSingboxVersion(getParamBool) {
+    const box114 = getParamBool('box1.14');
+    const box113 = !box114 && getParamBool('box1.13');
+    return { box114, box113 };
+}
+
+function resolveUrls(getParamAll) {
+    return getParamAll('url')
+        .flatMap((u) => (u.includes(',') ? u.split(',') : u))
+        .map((u) => u.trim())
+        .filter(Boolean);
+}
+
+function resolveEnvValues(getEnv) {
+    return {
+        IMG:      getEnv('IMG',     backimg),
+        sub:      getEnv('SUB',     subapi),
+        beian:    getEnv('BEIAN',   beiantext),
+        beianurl: getEnv('BEIANURL', beiandizi),
     };
-    const data = {};
-    data.url = url;
-    data.userAgent = getHeader('User-Agent');
+}
 
-    const urlParam = getParam('url');
-    if (urlParam && urlParam.trim()) {
-        data.urls = splitUrlsAndProxies(urlParam.split(',').map((u) => u.trim()));
+function resolveRuleUrl(url, target, getParam, isNode) {
+  const template = getParam('template') ?? '';
+
+  try {
+    const decoded = decodeURIComponent(template);
+    const parsed = new URL(decoded);
+    if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+      return { url: decoded, external: true };
     }
-    const target = getParam('target');
-    if (target) data.target = target;
-    const log = getParam('log');
-    if (log) data.log = log;
+  } catch {}
 
-    if (getParamBool('udp')) data.udp = true;
-    if (getParamBool('udp_frag')) data.udp_fragment = true;
-    if (getParamBool('tls_frag')) data.tls_fragment = true;
-    if (getParamBool('ep')) data.exclude_package = true;
-    if (getParamBool('ea')) data.exclude_address = true;
-    if (getParamBool('tailscale')) data.tailscale = true;
-    if (getParamBool('bridge')) data.bridge = true;
-    if (getParamBool('adgdns')) data.adgdns = true;
-    if (getParamBool('tun')) data.tun = true;
-    if (getParamBool('ech')) data.ech = true;
-    if (getParamBool('relay')) data.relay = true;
-    if (getParamBool('heruser')) data.heruser = true;
-    if (getParamBool('nodelist')) data.nodelist = true;
-    if (getParamBool('ipv6')) data.ipv6 = true;
+  const formattedTemplate = template.startsWith('/') ? template.slice(1) : template;
 
-    data.IMG = getEnv('IMG', backimg);
-    data.sub = getEnv('SUB', null);
-    data.beian = getEnv('BEIAN', beiantext);
-    data.beianurl = getEnv('BEIANURL', beiandizi);
-    data.checkUA = getEnv('CHECKUA', true);
-    data.tplmh = getEnv('TPLMH', null);
-    data.tplmh = data.tplmh
-        ? data.tplmh
-              .replace(/\\n/g, '\n')
-              .split('\n')
-              .map((line) => line.trim())
-              .filter(Boolean)
-        : null;
-    data.tplsb = getEnv('TPLSB', null);
-    data.tplsb = data.tplsb
-        ? data.tplsb
-              .replace(/\\n/g, '\n')
-              .split('\n')
-              .map((line) => line.trim())
-              .filter(Boolean)
-        : null;
+  let basePath;
+  if (target) {
+    basePath = isNode ? `template/${target}` : target;
+  } else {
+    basePath = isNode ? 'template' : '';
+  }
 
-    const templateBaseUrl = getEnv('TEMPLATE_URL', '');
-    if (templateBaseUrl) data.templateBaseUrl = templateBaseUrl;
-    const template = getParam('template');
-    if (template && !isUrl(template)) {
-        if (templateBaseUrl) {
-            data.rule = `${templateBaseUrl}/${data.target}${template}`;
-        } else {
-            data.rule = `${url.origin}${isNode ? '/template' : ''}/${data.target}${template}`;
-        }
-    } else {
-        data.rule = template;
-    }
+  const resolved = formattedTemplate
+    ? (basePath ? `${url.origin}/${basePath}/${formattedTemplate}` : `${url.origin}/${formattedTemplate}`)
+    : (basePath ? `${url.origin}/${basePath}` : `${url.origin}`);
 
-    return data;
+  return { url: resolved, external: false };
+}
+
+export function buildConfig(request, env, isNode = false) {
+    const { url, getHeader, getParam, getParamAll, getParamBool, getEnv } =
+        makeAccessors(request, env, isNode);
+
+    const target    = resolveTarget(getParam);
+    const rawUA     = getHeader('User-Agent') || '';
+    const userAgent = resolveUserAgent(rawUA, target);
+
+    return {
+        url,
+        urls:            resolveUrls(getParamAll),
+        userAgent,
+        target,
+
+        udp:             getParamBool('udp'),
+        udp_fragment:    getParamBool('udp_frag'),
+        tls_fragment:    getParamBool('tls_frag'),
+        ech:             getParamBool('ech'),
+        yaml:            getParamBool('yaml'),
+
+        tun:             getParamBool('tun'),
+        exclude_package: getParamBool('ep'),
+        exclude_address: getParamBool('ea'),
+        tailscale:       getParamBool('tailscale'),
+
+        ...resolveSingboxVersion(getParamBool),
+
+        ...resolveEnvValues(getEnv),
+
+        rule: resolveRuleUrl(url, target, getParam, isNode),
+        assets: env?.ASSETS ?? null,
+    };
 }

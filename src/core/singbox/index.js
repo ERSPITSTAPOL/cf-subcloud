@@ -1,102 +1,383 @@
-import { fetchpackExtract, fetchipExtract, fetchResponse } from '../../utils/index.js';
+import { splitUrlsAndProxies, fetchTemplate, fetchpackExtract, fetchipExtract } from '../../utils/index.js';
 import getOutbounds_Data from './outbounds.js';
-import { Verbose } from './Verbose.js';
-import { loadAndSetOutbound } from './grouping.js';
+import Config113 from '../../config/Singbox113.js';
+import Config114 from '../../config/Singbox114.js';
+
 export async function getsingbox_config(e) {
-    if (e.nodelist) {
-        const data = await getOutbounds_Data(e);
-        return {
-            status: data.status,
-            headers: data.headers,
-            data: JSON.stringify(data.data, null, 4),
-        };
-    }
     const config = structuredClone(Verbose(e));
-    const alldata = await Promise.all([
+    e.urls = splitUrlsAndProxies(e.urls);
+
+    const [
+        outboundsResult,
+        ruleResult,
+        excludePackageResult,
+        excludeAddressResult
+    ] = await Promise.allSettled([
         getOutbounds_Data(e),
-        fetchResponse(e.rule),
-        e.exclude_package ? fetchpackExtract() : null,
-        e.exclude_address ? fetchipExtract() : null,
+        fetchTemplate(e.rule, e.assets),
+        e.exclude_package ? fetchpackExtract() : Promise.resolve(null),
+        e.exclude_address ? fetchipExtract() : Promise.resolve(null),
     ]);
-    // 获取订阅数据
-    const Outbounds_Data = alldata[0];
-    if (Outbounds_Data?.data?.outbounds?.length === 0) {
-        throw new Error(`节点为空，请使用有效订阅`);
+
+    if (outboundsResult.status === 'rejected') {
+        throw outboundsResult.reason;
     }
-    // 获取规则数据
-    const Rule_Data = alldata[1];
-    if (!Rule_Data?.data) {
-        throw new Error('获取规则数据失败');
+    if (ruleResult.status === 'rejected') {
+        throw ruleResult.reason;
+    }
+    const outboundsData = outboundsResult.value;
+    const ruleData = normalizeRuleData(ruleResult.value, config, e);
+
+    if (e.exclude_package && excludePackageResult.status === 'fulfilled') {
+        e.Exclude_Package = excludePackageResult.value;
+    }
+    if (e.exclude_address && excludeAddressResult.status === 'fulfilled') {
+        e.Exclude_Address = excludeAddressResult.value;
     }
 
-    e.Package = alldata[2];
-    e.Address = alldata[3];
+    if (!outboundsData?.data) {
+        const err = new Error(
+            `Invalid outboundsData: missing data\n${JSON.stringify(outboundsData, null, 2)}`
+        );
+        err.raw = outboundsData;
+        throw err;
+    }
+    if (!ruleData?.data) {
+        const err = new Error(
+            `Invalid ruleData: missing data\n${JSON.stringify(ruleData, null, 2)}`
+        );
+        err.raw = ruleData;
+        throw err;
+    }
 
-    // 处理节点数据
-    Outbounds_Data.data.outbounds = outboundArrs(Outbounds_Data.data);
-    const ApiUrlname = Outbounds_Data.data.outbounds.map((res) => res.tag);
+    outboundsData.data.outbounds = filterOutbounds(outboundsData.data);
+    const proxyTags = outboundsData.data.outbounds.map(res => res.tag);
 
-    // 策略组处理
-    Rule_Data.data.outbounds = loadAndSetOutbound(Rule_Data.data.outbounds, ApiUrlname, e);
+    ruleData.data.outbounds = resolveOutboundGroups(
+        ruleData.data.outbounds,
+        proxyTags
+    );
+    ruleData.data.outbounds.push(...outboundsData.data.outbounds);
 
-    // 合并节点
-    Rule_Data.data.outbounds.push(...Outbounds_Data.data.outbounds);
-    applyTemplate(config, Rule_Data.data, e);
+    applyTemplate(config, ruleData.data, e);
+
     return {
-        status: Outbounds_Data.status,
-        headers: Outbounds_Data.headers,
-        data: JSON.stringify(config, null, 4),
+        status: outboundsData.status || 200,
+        headers: outboundsData.headers || {},
+        data: config,
     };
 }
 
-/**
- * 处理配置文件中的 outbounds 数组：
- * 1. 先排除特定类型（如 direct、dns 等）；
- * 2. 根据参数决定是否为 tag 添加序号后缀；
- *
- * @param {Object} data - 包含 outbounds 数组的配置对象
- * @returns {Array<Object>} 处理后的 outbounds 数组
- */
-export function outboundArrs(data) {
-    const excludedTypes = ['direct', 'block', 'dns', 'selector', 'urltest'];
-    if (data && Array.isArray(data.outbounds)) {
-        const filteredOutbounds = data.outbounds.filter((outbound) => {
-            if (excludedTypes.includes(outbound.type)) return false;
-            if (outbound?.server === '') return false;
-            if (outbound?.server_port < 1) return false;
-            if (outbound?.password === '') return false;
-            return true;
-        });
-        return filteredOutbounds;
+export function Verbose(e) {
+    const ua = e.userAgent || '';
+    const isSingbox = /sing|box|sfa|sfm/i.test(ua);
+
+    let version = '1.14';
+    let config = Config114;
+
+    if (e.box114) {
+        version = '1.14';
+        config = Config114;
+        e.singboxVersion = version;
+        return config;
     }
+    if (e.box113) {
+        version = '1.13';
+        config = Config113;
+        e.singboxVersion = version;
+        return config;
+    }
+
+    if (isSingbox) {
+        if (/1\.13\.(\d+)/.test(ua)) {
+            version = '1.13';
+            config = Config113;
+            e.singboxVersion = version;
+            return config;
+        }
+        if (/1\.14\.(\d+)/.test(ua)) {
+            version = '1.14';
+            config = Config114;
+            e.singboxVersion = version;
+            return config;
+        }
+    }
+
+    e.singboxVersion = version;
+    return config;
+}
+
+export function normalizeRuleData(ruleData, config, e) {
+    if (!ruleData?.data?.route || !Array.isArray(ruleData.data.route.rule_set)) {
+        return ruleData;
+    }
+
+    if (e.singboxVersion === '1.13') {
+        ruleData.data.route.rule_set = ruleData.data.route.rule_set.map(item => ({
+            ...item,
+            download_detour: 'direct',
+        }));
+        return ruleData;
+    }
+
+    if (e.singboxVersion === '1.14') {
+        const httpClientTag = config?.http_clients?.[0]?.tag;
+        if (httpClientTag) {
+            ruleData.data.route.rule_set = ruleData.data.route.rule_set.map(item => ({
+                ...item,
+                http_client: httpClientTag,
+            }));
+        }
+    }
+
+    return ruleData;
+}
+
+const EXCLUDED_TYPES = new Set(['direct', 'block', 'dns', 'selector', 'urltest']);
+export function filterOutbounds(data) {
+    if (!data || !Array.isArray(data.outbounds)) return [];
+    return data.outbounds.filter(outbound => {
+        if (EXCLUDED_TYPES.has(outbound.type)) return false;
+        if (outbound?.server === '') return false;
+        if (outbound?.server_port < 1) return false;
+        if (outbound?.password === '') return false;
+        return true;
+    });
+}
+
+export function resolveOutboundGroups(outbounds, outboundTags) {
+    const allTags = Array.isArray(outboundTags)
+        ? outboundTags.filter(t => typeof t === 'string')
+        : [];
+
+    const compileMatcher = (raw) => {
+        if (typeof raw !== 'string' || !raw) return null;
+
+        let pattern = raw;
+        let flags = '';
+
+        const m = raw.match(/^\/([\s\S]*)\/([gimsuy]*)$/);
+        if (m) {
+            pattern = m[1] || '';
+            flags = m[2] || '';
+        }
+
+        const inlineFlags = new Set();
+        pattern = pattern.replace(/\(\?([imsu])\)/gi, (_, f) => {
+            inlineFlags.add(f.toLowerCase());
+            return '';
+        });
+
+        flags = (flags || '').replace(/[gy]/g, '');
+        for (const f of inlineFlags) flags += f;
+
+        if (!flags.includes('u')) flags += 'u';
+        // if (flags === '') flags += 'i';
+
+        flags = [...new Set(flags)].join('');
+
+        try {
+            const re = new RegExp(pattern || '^$', flags);
+            return (s) => {
+                re.lastIndex = 0;
+                return re.test(s);
+            };
+        } catch {
+            return null;
+        }
+    };
+
+    const groupMap = new Map();
+    const referencedBy = new Map();
+
+    const templateList = Array.isArray(outbounds) ? outbounds : (outbounds?.outbounds || []);
+
+    for (const o of templateList) {
+        if (!o?.tag) continue;
+        groupMap.set(o.tag, {
+            ...o,
+            __outboundSet: new Set(Array.isArray(o.outbounds) ? o.outbounds : []),
+            __filters: Array.isArray(o.filter) ? o.filter : [],
+        });
+    }
+
+    for (const g of groupMap.values()) {
+        for (const f of g.__filters) {
+            if (!f?.action) continue;
+
+            if (f.action === 'all') {
+                for (const tag of allTags) g.__outboundSet.add(tag);
+                continue;
+            }
+
+            const kws = Array.isArray(f.keywords) ? f.keywords : [f.keywords];
+            const matchers = kws.map(kw => compileMatcher(kw)).filter(m => m !== null);
+            if (!matchers.length && f.action !== 'exclude') continue;
+
+            if (f.action === 'include') {
+                for (const name of allTags) {
+                    if (matchers.some(m => m(name))) g.__outboundSet.add(name);
+                }
+            } else if (f.action === 'exclude') {
+                if (g.__outboundSet.size === 0) {
+                    for (const tag of allTags) g.__outboundSet.add(tag);
+                }
+                for (const name of g.__outboundSet) {
+                    if (matchers.some(m => m(name))) g.__outboundSet.delete(name);
+                }
+            }
+        }
+    }
+
+    for (const g of groupMap.values()) {
+        for (const ref of g.__outboundSet) {
+            if (groupMap.has(ref)) {
+                if (!referencedBy.has(ref)) referencedBy.set(ref, new Set());
+                referencedBy.get(ref).add(g.tag);
+            }
+        }
+    }
+
+    const removed = new Set();
+    const queue = [];
+
+    for (const g of groupMap.values()) {
+        if (g.__outboundSet.size === 0) queue.push(g.tag);
+    }
+
+    let head = 0;
+    while (head < queue.length) {
+        const deadTag = queue[head++];
+        if (removed.has(deadTag)) continue;
+        removed.add(deadTag);
+
+        const parents = referencedBy.get(deadTag);
+        if (parents) {
+            for (const parentTag of parents) {
+                const pg = groupMap.get(parentTag);
+                if (!pg || removed.has(parentTag)) continue;
+
+                pg.__outboundSet.delete(deadTag);
+                if (pg.default === deadTag) delete pg.default;
+                if (pg.__outboundSet.size === 0) queue.push(parentTag);
+            }
+        }
+    }
+
+    const result = [];
+    for (const [tag, g] of groupMap) {
+        if (removed.has(tag)) continue;
+        const out = { ...g, outbounds: Array.from(g.__outboundSet) };
+        delete out.__outboundSet;
+        delete out.__filters;
+        delete out.filter;
+        result.push(out);
+    }
+
+    return result;
 }
 
 export function applyTemplate(top, rule, e) {
-    const existingSet = Array.isArray(top.route.rule_set) ? top.route.rule_set : [];
-    const newSet = Array.isArray(rule.route.rule_set) ? rule.route.rule_set : [];
-    const mergedMap = new Map();
-    for (const item of existingSet) {
-        if (item?.tag) mergedMap.set(item.tag, item);
-    }
-    for (const item of newSet) {
-        if (item?.tag) mergedMap.set(item.tag, item);
-    }
-    if (e.log) top.log.level = e.log;
-    top.inbounds = [...(top.inbounds || []), ...(rule.inbounds || [])];
-    top.outbounds = [...(top.outbounds || []), ...(rule.outbounds || [])];
-    top.route.final = rule?.route?.final || top.route.final;
-    top.route.rules = [...(top.route.rules || []), ...(rule.route.rules || [])];
-    top.route.rule_set = [...mergedMap.values()];
+    top.route = top.route || {};
+    if (rule) rule.route = rule.route || {};
 
-    // 添加排除包和排除地址配置
-    if (e.tun) {
-        top.inbounds = top.inbounds.filter((p) => p.type !== 'tun');
-    } else {
-        if (e.exclude_package && e.Package) addExcludePackage(top, e.Package);
-        if (e.exclude_address && e.Address) addExcludeAddress(top, e.Address);
+    const topRuleSets = Array.isArray(top.route.rule_set) ? top.route.rule_set : [];
+    const ruleRuleSets = Array.isArray(rule?.route?.rule_set) ? rule.route.rule_set : [];
+    const rsSet = new Set();
+    const finalRuleSets = [];
+
+    for (let i = 0; i < topRuleSets.length; i++) {
+        const item = topRuleSets[i];
+        if (item?.tag) {
+            rsSet.add(item.tag);
+            finalRuleSets.push(item);
+        }
     }
-    // 添加 tailscale 相关配置
+    for (let i = 0; i < ruleRuleSets.length; i++) {
+        const item = ruleRuleSets[i];
+        if (item?.tag && !rsSet.has(item.tag)) {
+            rsSet.add(item.tag);
+            finalRuleSets.push(item);
+        }
+    }
+    top.route.rule_set = finalRuleSets;
+
+    top.inbounds = rule?.inbounds || top.inbounds;
+
+    const topOutbounds = Array.isArray(top.outbounds) ? top.outbounds : [];
+    const ruleOutbounds = Array.isArray(rule?.outbounds) ? rule.outbounds : [];
+    const outSet = new Set();
+    const finalOutbounds = [];
+
+    for (let i = 0; i < topOutbounds.length; i++) {
+        const o = topOutbounds[i];
+        if (o?.tag) {
+            outSet.add(o.tag);
+            finalOutbounds.push(o);
+        }
+    }
+    for (let i = 0; i < ruleOutbounds.length; i++) {
+        const o = ruleOutbounds[i];
+        if (o?.tag && !outSet.has(o.tag)) {
+            outSet.add(o.tag);
+            finalOutbounds.push(o);
+        }
+    }
+    top.outbounds = finalOutbounds;
+    top.route.final = rule?.route?.final || top.route.final;
+
+    const existingRules = Array.isArray(top.route.rules) ? top.route.rules : [];
+    const newRules = Array.isArray(rule?.route?.rules) ? rule.route.rules : [];
+
+    if (existingRules.length === 0 && newRules.length === 0) {
+        top.route.rules = [];
+    } else {
+        const ruleTracker = new Set();
+        const finalRules = [];
+
+        const pushIfUnique = (r) => {
+            const rsStr = Array.isArray(r.rule_set) ? r.rule_set.join(',') : (r.rule_set || '');
+            const ipStr = Array.isArray(r.ip_cidr) ? r.ip_cidr.join(',') : (r.ip_cidr || '');
+            const key = `${r.action}-${r.outbound}-${r.clash_mode}-${r.protocol}-${rsStr}-${ipStr}`;
+            if (!ruleTracker.has(key)) {
+                ruleTracker.add(key);
+                finalRules.push(r);
+            }
+        };
+
+        if (e.tls_fragment) {
+            for (const r of [...existingRules, ...newRules]) {
+                if (r.action === 'route-options') {
+                    r.tls_fragment = true;
+                    r.tls_fragment_fallback_delay = '5m';
+                }
+                pushIfUnique(r);
+            }
+        } else {
+            for (const r of [...existingRules, ...newRules]) {
+                pushIfUnique(r);
+            }
+        }
+
+        top.route.rules = finalRules;
+    }
+
+    if (e.tun) {
+        const filteredInbounds = [];
+        for (let i = 0; i < (top.inbounds?.length || 0); i++) {
+            if (top.inbounds[i].type !== 'tun') {
+                filteredInbounds.push(top.inbounds[i]);
+            }
+        }
+        top.inbounds = filteredInbounds;
+    } else {
+        if (e.exclude_package) addExcludePackage(top, e.Exclude_Package);
+        if (e.exclude_address) addExcludeAddress(top, e.Exclude_Address);
+    }
+
     if (e.tailscale) {
+        top.dns = top.dns || { servers: [] };
+        top.dns.servers = Array.isArray(top.dns.servers) ? top.dns.servers : [];
         top.dns.servers.push({
             type: 'tailscale',
             endpoint: 'ts-ep',
@@ -106,110 +387,11 @@ export function applyTemplate(top, rule, e) {
         top.endpoints.push({
             type: 'tailscale',
             tag: 'ts-ep',
+            auth_key: '',
             hostname: 'singbox-tailscale',
-            accept_routes: true,
-            exit_node_allow_lan_access: true,
             udp_timeout: '5m',
         });
     }
-    if (e.bridge && e.ispre) {
-        top.outbounds.push({
-            type: 'bridge',
-            tag: 'bridge-out',
-        });
-        top.route.rules.unshift({
-            preferred_by: 'bridge',
-            outbound: 'bridge-out',
-        });
-    }
-
-    if (!e.ipv6) {
-        top.dns.rules.unshift({
-            ip_version: 6,
-            action: 'reject',
-            method: 'drop',
-        });
-    }
-
-    // 处理 route-options 规则
-    top.route.rules = top.route.rules.flatMap((p) => {
-        if (p.action === 'route-options') {
-            if (e.udp) {
-                p.udp_disable_domain_unmapping = true;
-                p.udp_connect = true;
-                p.udp_timeout = '5m';
-            }
-            if (e.tls_fragment) {
-                p.tls_fragment = true;
-                p.tls_fragment_fallback_delay = '300ms';
-            }
-            // 如果既没有 udp 也没有 tls_fragment 参数，则过滤掉该规则
-            return e.udp || e.tls_fragment ? p : [];
-        }
-        return p;
-    });
-    if (e.adgdns) {
-        top.dns.servers = top.dns.servers.map((p) => {
-            if (p.tag === 'DIRECT-DNS') {
-                return {
-                    type: 'https',
-                    tag: 'DIRECT-DNS',
-                    detour: '🎯 全球直连',
-                    server: 'doh.18bit.cn',
-                    domain_resolver: 'local',
-                };
-            }
-            if (p.tag === 'PROXY-DNS') {
-                return {
-                    type: 'https',
-                    tag: 'PROXY-DNS',
-                    detour: '🚀 节点选择',
-                    server_port: 443,
-                    server: 'dns.adguard-dns.com',
-                    path: '/dns-query',
-                    domain_resolver: 'local',
-                };
-            }
-            return p;
-        });
-    }
-    if (e.ispre) {
-        const proxyname = rule.outbounds[0].tag;
-        top.http_clients = [
-            {
-                tag: 'DIRECT-clients',
-                engine: 'go',
-                version: 2,
-                disable_version_fallback: false,
-                detour: '🎯 全球直连',
-            },
-            {
-                tag: 'PROXY-clients',
-                engine: 'go',
-                version: 2,
-                disable_version_fallback: false,
-                detour: proxyname,
-            },
-        ];
-        // 替换 download_detour
-        top.route.rule_set = top.route.rule_set.map((p) => {
-            if (p.download_detour) {
-                const { download_detour, ...rest } = p;
-                return {
-                    ...rest,
-                };
-            }
-            return p;
-        });
-        top.route.default_http_client = 'DIRECT-clients';
-    }
-    if (e.ech) {
-        top.dns.rules.unshift({
-            domain_suffix: ['cloudflare-ech.com'],
-            server: 'DIRECT-DNS',
-        });
-    }
-    return top;
 }
 
 export function addExcludePackage(singboxTopData, newPackages) {

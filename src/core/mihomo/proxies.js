@@ -1,29 +1,63 @@
-import { processSubscription } from '../../utils/index.js';
-
+import { fetchResponse, buildApiUrl } from '../../utils/index.js';
 export default async function getProxies_Data(e) {
-    const results = await processSubscription(e.urls, e.userAgent, e.sub, e.target, e.heruser);
-    if (results.data?.data?.proxies?.length === 0) {
-        throw new Error('未从任何 URL 找到有效的节点');
+    const isSingle = e.urls.length === 1;
+    const data = { proxies: [], providers: {} };
+
+    const results = await Promise.allSettled(e.urls.map((url, index) => fetchWithFallback(url, e).then((res) => ({ res, index }))));
+
+    const responses = [];
+
+    for (const result of results) {
+        if (result.status !== 'fulfilled') continue;
+
+        const { res, index } = result.value;
+        if (res?.data?.proxies?.length) {
+            processProxies(res.data.proxies, e, isSingle ? 0 : index + 1);
+            responses.push({ status: res.status, headers: res.headers });
+            data.proxies.push(...res.data.proxies);
+        }
     }
-    processProxies(results.data.data.proxies, e, results.data.names);
+
+    if (responses.length === 0) return null;
+
+    const selected = isSingle ? responses[0] : responses[Math.floor(Math.random() * responses.length)];
+
     return {
-        status: results.status,
-        headers: results.headers,
-        data: results.data.data,
+        status: selected.status,
+        headers: selected.headers,
+        data,
     };
 }
 
+// 通用获取响应函数，支持回退机制
+async function fetchWithFallback(url, options) {
+    let res = await fetchResponse(url, options.userAgent);
+
+    if (res?.data?.proxies && Array.isArray(res.data.proxies) && res.data.proxies.length > 0) {
+        return res;
+    }
+
+    // 如果第一次请求失败，尝试使用构建的API URL
+    const apiUrl = buildApiUrl(url, options.sub, options.target);
+    return await fetchResponse(apiUrl, options.userAgent);
+}
+
 // 处理代理数组的辅助函数
-function processProxies(proxies, options, names) {
+function processProxies(proxies, options, index) {
     proxies.forEach((proxy) => {
-        if (options.relay && names[0].includes(proxy.name)) {
-            options.proxyname = names[0];
-            options.dialerproxy = names.slice(1).flat();
-            if (options.proxyname && options.dialerproxy) {
-                proxy['dialer-proxy'] = '🔗链式前置';
+        if (index > 0) {
+            proxy.name = `[${index}] ${proxy.name}`;
+            if (options.relay) {
+                if (index === 1) {
+                    options.proxyname ??= [];
+                    options.proxyname.push(proxy.name);
+                } else {
+                    proxy['dialer-proxy'] = '🔗链式前置';
+                    options.dialerproxy ??= [];
+                    options.dialerproxy.push(proxy.name);
+                }
             }
         }
-
         if (options.udp) {
             proxy.udp = true;
         }

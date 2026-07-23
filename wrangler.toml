@@ -1,8 +1,24 @@
 keep_vars = true
 name = "cf-subcloud"
-main = "dist/_worker.js"
-compatibility_date = "2026-07-09"
+main = "dist/worker.js"
+compatibility_date = "2026-07-01"
 compatibility_flags = ["nodejs_compat"]
+
+[observability]
+enabled = false
+head_sampling_rate = 1
+
+[observability.logs]
+enabled = false
+head_sampling_rate = 1
+persist = false
+invocation_logs = false
+
+[observability.traces]
+enabled = false
+persist = false
+head_sampling_rate = 1
+
 [assets]
 directory = "./template"
 binding = "ASSETS"
